@@ -1,16 +1,14 @@
 // port-lint: source src/unix.rs
-@file:OptIn(ExperimentalForeignApi::class)
-
 package io.github.kotlinmania.syslocale
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
 
-internal const val LANGUAGE: String = "LANGUAGE"
-internal const val LC_ALL: String = "LC_ALL"
-internal const val LC_MESSAGES: String = "LC_MESSAGES"
-internal const val LANG: String = "LANG"
+private const val LANGUAGE = "LANGUAGE"
+private const val LC_ALL = "LC_ALL"
+private const val LC_MESSAGES = "LC_MESSAGES"
+private const val LANG = "LANG"
 
 /**
  * Environment variable access abstraction to allow testing without
@@ -19,23 +17,21 @@ internal const val LANG: String = "LANG"
  * Use [StdEnv] to query the process environment.
  */
 internal interface EnvAccess {
-    /**
-     * Returns the value of the environment variable named [key], or `null`
-     * if no such variable is set.
-     */
+    /** Looks up an environment variable by `key`, returning its value or `null` when unset. */
     fun get(key: String): String?
 }
 
-/** Proxy to the process environment. */
+/** Proxy to the process environment via `getenv`. */
+@OptIn(ExperimentalForeignApi::class)
 internal object StdEnv : EnvAccess {
     override fun get(key: String): String? = getenv(key)?.toKString()
 }
 
-internal fun get(): Sequence<String> = innerGet(StdEnv)
+internal actual fun providerGet(): Iterator<String> = innerGet(StdEnv)
 
 /**
  * Retrieves a list of unique locales by checking specific environment variables
- * in a predefined order: LANGUAGE, LC_ALL, LC_MESSAGES, and LANG.
+ * in a predefined order: `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, and `LANG`.
  *
  * The function first checks the `LANGUAGE` environment variable, which can contain
  * one or more locales separated by a colon (`:`). It then splits these values,
@@ -51,11 +47,11 @@ internal fun get(): Sequence<String> = innerGet(StdEnv)
  * For more information check this issue: https://github.com/1Password/sys-locale/issues/14.
  *
  * The function ensures that locales are returned in the order of precedence
- * and without duplicates. The final list of locales is returned as a sequence.
+ * and without duplicates. The final list of locales is returned as an iterator.
  *
  * # Returns
  *
- * A sequence over the unique locales found in the environment variables.
+ * An iterator over the unique locales found in the environment variables.
  *
  * # Environment Variables Checked
  *
@@ -66,14 +62,14 @@ internal fun get(): Sequence<String> = innerGet(StdEnv)
  *
  * # Example
  *
- * ```kotlin
- * val locales: List<String> = innerGet(env).toList()
+ * ```
+ * val locales = innerGet(env).asSequence().toList()
  * for (locale in locales) {
  *     println("User's preferred locales: $locale")
  * }
  * ```
  */
-internal fun innerGet(env: EnvAccess): Sequence<String> {
+internal fun innerGet(env: EnvAccess): Iterator<String> {
     val locales = mutableListOf<String>()
 
     // LANGUAGE contains one or multiple locales separated by colon (':')
@@ -81,7 +77,7 @@ internal fun innerGet(env: EnvAccess): Sequence<String> {
     if (languageVal != null) {
         for (part in languageVal.split(':')) {
             val locale = posixToBcp47(part)
-            if (!locales.contains(locale)) {
+            if (locale !in locales) {
                 locales.add(locale)
             }
         }
@@ -89,22 +85,20 @@ internal fun innerGet(env: EnvAccess): Sequence<String> {
 
     // LC_ALL, LC_MESSAGES and LANG contain one locale
     for (variable in arrayOf(LC_ALL, LC_MESSAGES, LANG)) {
-        val value = env.get(variable)?.takeIf { it.isNotEmpty() }
-        if (value != null) {
-            val locale = posixToBcp47(value)
-            if (!locales.contains(locale)) {
-                locales.add(locale)
-            }
+        val value = env.get(variable)?.takeIf { it.isNotEmpty() } ?: continue
+        val locale = posixToBcp47(value)
+        if (locale !in locales) {
+            locales.add(locale)
         }
     }
 
-    return locales.asSequence()
+    return locales.iterator()
 }
 
 /**
  * Converts a POSIX locale string to a BCP 47 locale string.
  *
- * This function processes the input [locale] by removing any character encoding
+ * This function processes the input `locale` by removing any character encoding
  * (the part after the `.` character) and any modifiers (the part after the `@` character).
  * It replaces underscores (`_`) with hyphens (`-`) to conform to BCP 47 formatting.
  *
@@ -117,33 +111,33 @@ internal fun innerGet(env: EnvAccess): Sequence<String> {
  *
  * # Examples
  *
- * ```kotlin
- * val bcp47 = posixToBcp47("en-US") // already BCP 47
- * check(bcp47 == "en-US") // no changes
+ * ```
+ * val bcp47a = posixToBcp47("en-US") // already BCP 47
+ * check(bcp47a == "en-US")           // no changes
  *
- * val bcp47 = posixToBcp47("en_US")
- * check(bcp47 == "en-US")
+ * val bcp47b = posixToBcp47("en_US")
+ * check(bcp47b == "en-US")
  *
- * val bcp47 = posixToBcp47("ru_RU.UTF-8")
- * check(bcp47 == "ru-RU")
+ * val bcp47c = posixToBcp47("ru_RU.UTF-8")
+ * check(bcp47c == "ru-RU")
  *
- * val bcp47 = posixToBcp47("fr_FR@dict")
- * check(bcp47 == "fr-FR")
+ * val bcp47d = posixToBcp47("fr_FR@dict")
+ * check(bcp47d == "fr-FR")
  *
- * val bcp47 = posixToBcp47("de_DE.UTF-8@euro")
- * check(bcp47 == "de-DE")
+ * val bcp47e = posixToBcp47("de_DE.UTF-8@euro")
+ * check(bcp47e == "de-DE")
  * ```
  *
- * # TODO
+ * # Pending work
  *
  * 1. Implement POSIX to BCP 47 modifier conversion (see https://github.com/1Password/sys-locale/issues/32).
  * 2. Optimize to avoid creating a new buffer (see https://github.com/1Password/sys-locale/pull/33).
  */
 internal fun posixToBcp47(locale: String): String {
-    val builder = StringBuilder()
+    val out = StringBuilder()
     for (c in locale) {
         if (c == '.' || c == '@') break
-        builder.append(if (c == '_') '-' else c)
+        out.append(if (c == '_') '-' else c)
     }
-    return builder.toString()
+    return out.toString()
 }
