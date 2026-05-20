@@ -280,12 +280,6 @@ kotlin {
                 implementation(kotlin("test"))
             }
         }
-        val posixMain by creating {
-            dependsOn(commonMain)
-        }
-        val posixTest by creating {
-            dependsOn(commonTest)
-        }
     }
     jvmToolchain(21)
 }
