@@ -199,10 +199,18 @@ kotlin {
         binaries.framework { baseName = "SysLocale"; xcf.add(this) }
     }
     iosSimulatorArm64 {
-        binaries.framework { baseName = "SysLocale"; xcf.add(this) }
+        binaries.framework {
+            baseName = "SysLocale"
+            isStatic = true
+            xcf.add(this)
+        }
     }
     iosX64 {
-        binaries.framework { baseName = "SysLocale"; xcf.add(this) }
+        binaries.framework {
+            baseName = "SysLocale"
+            isStatic = true
+            xcf.add(this)
+        }
     }
 
     tvosArm64 {
