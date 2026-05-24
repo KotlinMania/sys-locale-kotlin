@@ -411,7 +411,21 @@ mavenPublishing {
 }
 
 // .github/workflows/codeql.yml invokes `./gradlew codeqlCompileJvm` to feed
-// kotlinc-compiled commonMain/androidMain through the CodeQL Java agent.
+// kotlinc-compiled commonMain + jvmMain through the CodeQL Java agent.
+//
+// The CodeQL Java agent hooks `K2JVMCompiler.doExecute(...)`, which is only
+// reached on the K2 single-target code path. A `-Xmulti-platform` invocation
+// goes through K2's HMPP fragment pipeline instead, bypasses doExecute, AND
+// silently degrades to a non-multiplatform parse that rejects every `expect`
+// declaration in commonMain. So a real KMP build path is the wrong shape for
+// this extraction task.
+//
+// Instead, `codeqlGenerateMergedSources` mirrors commonMain + jvmMain into a
+// single-target source tree by stripping `expect` declarations (the JVM target
+// supplies bodies) and the `actual` modifier (leaving plain definitions).
+// kotlinc then runs as a vanilla JVM compile that the agent can hook, and the
+// emitted TRAP reflects the same JVM type signatures the real `jvmJar` would
+// publish. The KMP plugin's own per-target compiles are untouched.
 val codeqlKotlinc: Configuration by configurations.creating {
     description = "Kotlin compiler (CodeQL extraction target only - not published)"
     isCanBeResolved = true
@@ -419,7 +433,7 @@ val codeqlKotlinc: Configuration by configurations.creating {
 }
 
 val codeqlSourceClasspath: Configuration by configurations.creating {
-    description = "Runtime classpath for CodeQL extraction of commonMain and androidMain sources"
+    description = "Runtime classpath for CodeQL extraction of merged commonMain + jvmMain sources"
     isCanBeResolved = true
     isCanBeConsumed = false
 }
@@ -438,22 +452,80 @@ dependencies {
     codeqlSourceClasspath("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.11.0")
     codeqlSourceClasspath("org.jetbrains.kotlinx:kotlinx-datetime-jvm:0.8.0")
     codeqlSourceClasspath("org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm:0.4.0")
-    codeqlSourceClasspath(files(projectAndroidSdkDir.resolve("platforms/android-$projectCompileSdk/android.jar")))
+}
+
+// Modifier/annotation prefix that can legally precede `expect`/`actual`. Kept
+// in one place because both regexes below need it.
+val codeqlKotlinModifierPrefix =
+    """(?:(?:@[\w.]+(?:\([^)]*\))?|public|private|internal|protected|abstract|""" +
+        """open|sealed|final|inner|enum|annotation|data|inline|value|external|""" +
+        """infix|operator|tailrec|suspend|override|lateinit|const)[ \t]+)*"""
+
+// Match a single-line `expect fun|val|var` declaration (no body) and the trailing
+// newline so we can delete the whole line cleanly.
+val codeqlExpectDeclLineRegex = Regex(
+    """(?m)^[ \t]*${codeqlKotlinModifierPrefix}expect[ \t]+${codeqlKotlinModifierPrefix}(?:fun|val|var)[ \t][^{}\n]*\n""",
+)
+
+// Match an `actual` modifier on a declaration so it can be removed in place;
+// preceding modifiers (captured in group 1) are preserved.
+val codeqlActualModifierRegex = Regex(
+    """(?m)^([ \t]*${codeqlKotlinModifierPrefix})actual[ \t]+""",
+)
+
+val codeqlGenerateMergedSources = tasks.register("codeqlGenerateMergedSources") {
+    description =
+        "Materialize a single-target Kotlin source tree (commonMain with `expect` " +
+            "declarations dropped + jvmMain with `actual` stripped) for codeqlCompileJvm."
+    group = "verification"
+
+    val commonRoot = layout.projectDirectory.dir("src/commonMain/kotlin").asFile
+    val platformRoot = layout.projectDirectory.dir("src/jvmMain/kotlin").asFile
+    val commonSources = fileTree(commonRoot) { include("**/*.kt") }
+    val platformSources = fileTree(platformRoot) { include("**/*.kt") }
+    val outDir = layout.buildDirectory.dir("generated/codeql-merged/kotlin")
+
+    inputs.files(commonSources).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(platformSources).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.dir(outDir)
+
+    doLast {
+        val out = outDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+
+        fun mirror(root: File, tree: FileTree, dropExpectDecls: Boolean) {
+            tree.forEach { src ->
+                val rel = src.toRelativeString(root)
+                val dst = out.resolve(rel)
+                dst.parentFile.mkdirs()
+                var text = src.readText()
+                if (dropExpectDecls) {
+                    text = codeqlExpectDeclLineRegex.replace(text, "")
+                }
+                text = codeqlActualModifierRegex.replace(text, "$1")
+                dst.writeText(text)
+            }
+        }
+        mirror(commonRoot, commonSources, dropExpectDecls = true)
+        mirror(platformRoot, platformSources, dropExpectDecls = false)
+    }
 }
 
 val codeqlCompileJvm = tasks.register<JavaExec>("codeqlCompileJvm") {
     description =
-        "Compile commonMain and androidMain Kotlin sources with kotlinc 2.3.21 for CodeQL Java/Kotlin extraction."
+        "Compile merged commonMain + jvmMain Kotlin sources with kotlinc 2.3.21 as a " +
+            "single-target JVM compile, for CodeQL Java/Kotlin extraction."
     group = "verification"
 
+    dependsOn(codeqlGenerateMergedSources)
     classpath(codeqlKotlinc)
     mainClass.set("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
 
     val outDir = layout.buildDirectory.dir("classes/kotlin/codeql-jvm")
     val aarExtractDir = layout.buildDirectory.dir("codeql/android-aar")
-    val commonSources = fileTree("src/commonMain/kotlin") { include("**/*.kt") }
-    val platformSources = fileTree("src/androidMain/kotlin") { include("**/*.kt") }
-    val sources = files(commonSources, platformSources)
+    val mergedDir = layout.buildDirectory.dir("generated/codeql-merged/kotlin")
+    val sources = fileTree(mergedDir) { include("**/*.kt") }
     val sentinelDir = layout.buildDirectory.dir("generated/codeql-empty-source")
     inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(codeqlSourceClasspath).withNormalizer(ClasspathNormalizer::class.java)
@@ -481,22 +553,20 @@ val codeqlCompileJvm = tasks.register<JavaExec>("codeqlCompileJvm") {
         val fullClasspath =
             (codeqlSourceClasspath.resolve() + extractedJars)
                 .joinToString(File.pathSeparator) { it.absolutePath }
-        val commonSourceFiles = commonSources.files.toMutableList()
         val sourceFiles = sources.files.toMutableList()
         if (sourceFiles.isEmpty()) {
-            val sentinelFile = sentinelDir.get().asFile.resolve("io/github/kotlinmania/syslocale/codeql/_CodeqlEmptySource.kt")
+            val sentinelFile = sentinelDir.get().asFile.resolve("io/github/kotlinmania/syslocale/CodeqlEmptySentinel.kt")
             sentinelFile.parentFile.mkdirs()
             sentinelFile.writeText(
                 """
                 // Auto-generated. Present so codeqlCompileJvm has at least
                 // one Kotlin source to feed kotlinc; replaced by real
                 // commonMain content once porting begins.
-                package io.github.kotlinmania.syslocale.codeql
+                package io.github.kotlinmania.syslocale
 
-                private object _CodeqlEmptySource
+                private object CodeqlEmptySentinel
                 """.trimIndent(),
             )
-            commonSourceFiles += sentinelFile
             sourceFiles += sentinelFile
         }
         args = listOf(
@@ -507,12 +577,8 @@ val codeqlCompileJvm = tasks.register<JavaExec>("codeqlCompileJvm") {
             "-no-reflect",
             "-language-version", "2.3",
             "-api-version", "2.3",
-            "-Xmulti-platform",
-            "-Xcommon-sources=${commonSourceFiles.joinToString(",") { it.absolutePath }}",
-            "-Xexpect-actual-classes",
             "-opt-in", "kotlin.time.ExperimentalTime",
             "-opt-in", "kotlin.concurrent.atomics.ExperimentalAtomicApi",
-            "-opt-in", "kotlin.ExperimentalUnsignedTypes",
         ) + sourceFiles.map { it.absolutePath }
     }
 }
