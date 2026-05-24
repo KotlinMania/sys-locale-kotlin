@@ -5,10 +5,10 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
 
-private const val LANGUAGE = "LANGUAGE"
-private const val LC_ALL = "LC_ALL"
-private const val LC_MESSAGES = "LC_MESSAGES"
-private const val LANG = "LANG"
+internal const val LANGUAGE = "LANGUAGE"
+internal const val LC_ALL = "LC_ALL"
+internal const val LC_MESSAGES = "LC_MESSAGES"
+internal const val LANG = "LANG"
 
 /**
  * Environment variable access abstraction to allow testing without
