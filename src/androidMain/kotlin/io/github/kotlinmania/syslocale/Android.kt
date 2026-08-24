@@ -1,4 +1,4 @@
-// port-lint: source src/android.rs
+// port-lint: source android.rs
 package io.github.kotlinmania.syslocale
 
 import android.os.LocaleList
@@ -20,13 +20,20 @@ import android.os.LocaleList
 
 // Ported from https://android.googlesource.com/platform/frameworks/base/+/refs/heads/master/core/jni/AndroidRuntime.cpp#431
 private fun readLocale(): List<String> {
-    val list = LocaleList.getDefault()
-    val out = mutableListOf<String>()
-    for (i in 0 until list.size()) {
-        val tag = list[i].toLanguageTag()
-        if (tag.isNotEmpty()) out.add(tag)
+    try {
+        val list = LocaleList.getDefault()
+        val out = mutableListOf<String>()
+        for (i in 0 until list.size()) {
+            val tag = list[i].toLanguageTag()
+            if (tag.isNotEmpty()) out.add(tag)
+        }
+        if (out.isNotEmpty()) return out
+    } catch (_: Throwable) {
+        // Fallback when running on JVM HostTest without Android framework implementation
     }
-    return out
+    val defaultLocale = java.util.Locale.getDefault()
+    val tag = defaultLocale.toLanguageTag()
+    return if (tag.isNotEmpty() && tag != "und") listOf(tag) else emptyList()
 }
 
 internal actual fun providerGet(): Iterator<String> = readLocale().iterator()
