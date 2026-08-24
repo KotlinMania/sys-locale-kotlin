@@ -1,4 +1,4 @@
-// port-lint: source src/apple.rs
+// port-lint: source apple.rs
 package io.github.kotlinmania.syslocale
 
 import kotlinx.cinterop.CValue
@@ -7,6 +7,7 @@ import kotlinx.cinterop.UByteVar
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.cValue
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
@@ -32,7 +33,7 @@ internal actual fun providerGet(): Iterator<String> = iterator {
 
         // 0 to N-1 inclusive
         while (idx < numLangs) {
-            val raw = CFArrayGetValueAtIndex(preferredLangs.array, idx)
+            val raw = CFArrayGetValueAtIndex(preferredLangs.array, idx.convert())
             if (raw == null) {
                 idx++
                 continue
@@ -47,12 +48,12 @@ internal actual fun providerGet(): Iterator<String> = iterator {
             val strLen = CFStringGetLength(locale)
 
             val rangeArg: CValue<CFRange> = cValue {
-                location = 0
+                location = 0.convert()
                 length = strLen
             }
 
             val emitted = memScoped {
-                val capacityVar = alloc<CFIndexVar>().apply { value = 0 }
+                val capacityVar = alloc<CFIndexVar>().apply { value = 0.convert() }
                 // - `locale` is a valid CFString
                 // - The supplied range is within the length of the string.
                 // - `capacity` is writable.
@@ -65,19 +66,19 @@ internal actual fun providerGet(): Iterator<String> = iterator {
                     0u,
                     false,
                     null,
-                    0,
+                    0.convert(),
                     capacityVar.ptr,
                 )
 
                 val capacity = capacityVar.value
                 // Guard against a zero-sized allocation, if that were to somehow occur.
-                if (capacity == 0L) return@memScoped null
+                if (capacity.convert<Long>() <= 0L) return@memScoped null
 
                 // This is the number of bytes that will be written to
                 // the buffer, not the number of codepoints they would contain.
-                val buffer = allocArray<UByteVar>(capacity)
+                val buffer = allocArray<UByteVar>(capacity.convert<Long>())
 
-                val outLenVar = alloc<CFIndexVar>().apply { value = 0 }
+                val outLenVar = alloc<CFIndexVar>().apply { value = 0.convert() }
                 // - `locale` is a valid CFString
                 // - The supplied range is within the length of the string.
                 // - `buffer` is writable and has sufficent capacity to receive the data.
@@ -101,7 +102,7 @@ internal actual fun providerGet(): Iterator<String> = iterator {
 
                 // The system has written `outLen` elements, so they are
                 // initialized and inside the buffer's capacity bounds.
-                val outLen = outLenVar.value.toInt()
+                val outLen = outLenVar.value.convert<Int>()
                 val bytes = ByteArray(outLen) { i -> buffer[i].toByte() }
 
                 // This should always contain UTF-8 since we told the system to
@@ -126,7 +127,7 @@ private fun getLanguages(): CFArrayHandle? {
     val langs = CFLocaleCopyPreferredLanguages() ?: return null
     // The returned array is a valid CFArray object.
     val count = CFArrayGetCount(langs)
-    return if (count != 0L) CFArrayHandle(langs, count) else {
+    return if (count.convert<Long>() != 0L) CFArrayHandle(langs, count.convert()) else {
         CFRelease(langs)
         null
     }
