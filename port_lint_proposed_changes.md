@@ -1,6 +1,6 @@
 # port-lint Proposed Changes
 
-**Generated:** 2026-08-23
+**Generated:** 2026-08-25
 **Source:** tmp/sys-locale/src
 **Target:** src/commonMain/kotlin
 
