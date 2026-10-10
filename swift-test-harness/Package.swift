@@ -3,15 +3,17 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftTestHarness",
-    platforms: [.macOS(.v14)],
+    platforms: [
+        .macOS(.v15),
+    ],
     dependencies: [
-        .package(name: "SysLocale", path: "../build/SPMPackage/macosArm64/Debug")
+        .package(name: "SysLocale", path: "../build/SPMPackage/macosArm64/Debug"),
     ],
     targets: [
         .testTarget(
             name: "SwiftTestHarnessTests",
             dependencies: [
-                .product(name: "SysLocaleLibrary", package: "SysLocale")
+                .product(name: "SysLocaleLibrary", package: "SysLocale"),
             ],
             swiftSettings: [
                 .unsafeFlags([

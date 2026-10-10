@@ -4,11 +4,15 @@ package io.github.kotlinmania.syslocale
 private sealed interface GlobalType {
     val navigator: dynamic
 
-    class Window(val window: dynamic) : GlobalType {
+    class Window(
+        val window: dynamic,
+    ) : GlobalType {
         override val navigator: dynamic get() = window.navigator
     }
 
-    class Worker(val worker: dynamic) : GlobalType {
+    class Worker(
+        val worker: dynamic,
+    ) : GlobalType {
         override val navigator: dynamic get() = worker.navigator
     }
 }

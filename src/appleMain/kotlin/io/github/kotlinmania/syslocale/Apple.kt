@@ -25,100 +25,106 @@ import platform.CoreFoundation.CFStringRef
 import platform.CoreFoundation.kCFStringEncodingUTF8
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun providerGet(): Iterator<String> = iterator {
-    val preferredLangs = getLanguages() ?: return@iterator
-    try {
-        val numLangs = preferredLangs.count
-        var idx: Long = 0L
+internal actual fun providerGet(): Iterator<String> =
+    iterator {
+        val preferredLangs = getLanguages() ?: return@iterator
+        try {
+            val numLangs = preferredLangs.count
+            var idx: Long = 0L
 
-        // 0 to N-1 inclusive
-        while (idx < numLangs) {
-            val raw = CFArrayGetValueAtIndex(preferredLangs.array, idx.convert())
-            if (raw == null) {
+            // 0 to N-1 inclusive
+            while (idx < numLangs) {
+                val raw = CFArrayGetValueAtIndex(preferredLangs.array, idx.convert())
+                if (raw == null) {
+                    idx++
+                    continue
+                }
+
+                // The current index has been checked that its still within bounds of the array.
+                // We don't retain the strings because we know we have total ownership of the backing array.
+                val locale: CFStringRef = raw.reinterpret()
                 idx++
-                continue
+
+                // `locale` is a valid CFString pointer because the array will always contain a value.
+                val strLen = CFStringGetLength(locale)
+
+                val rangeArg: CValue<CFRange> =
+                    cValue {
+                        location = 0.convert()
+                        length = strLen
+                    }
+
+                val emitted =
+                    memScoped {
+                        val capacityVar = alloc<CFIndexVar>().apply { value = 0.convert() }
+                        // - `locale` is a valid CFString
+                        // - The supplied range is within the length of the string.
+                        // - `capacity` is writable.
+                        // Passing NULL and `0` is correct for the buffer to get the
+                        // encoded output length.
+                        CFStringGetBytes(
+                            locale,
+                            rangeArg,
+                            kCFStringEncodingUTF8,
+                            0u,
+                            false,
+                            null,
+                            0.convert(),
+                            capacityVar.ptr,
+                        )
+
+                        val capacity = capacityVar.value
+                        // Guard against a zero-sized allocation, if that were to somehow occur.
+                        if (capacity.convert<Long>() <= 0L) return@memScoped null
+
+                        // This is the number of bytes that will be written to
+                        // the buffer, not the number of codepoints they would contain.
+                        val buffer = allocArray<UByteVar>(capacity.convert<Long>())
+
+                        val outLenVar = alloc<CFIndexVar>().apply { value = 0.convert() }
+                        // - `locale` is a valid CFString
+                        // - The supplied range is within the length of the string.
+                        // - `buffer` is writable and has sufficent capacity to receive the data.
+                        // - `maxBufLen` is correctly based on `buffer`'s available capacity.
+                        // - `outLen` is writable.
+                        CFStringGetBytes(
+                            locale,
+                            rangeArg,
+                            kCFStringEncodingUTF8,
+                            0u,
+                            false,
+                            buffer,
+                            capacity,
+                            outLenVar.ptr,
+                        )
+
+                        // Sanity check that both calls to `CFStringGetBytes`
+                        // were equivalent. If they weren't, the system is doing
+                        // something very wrong...
+                        check(outLenVar.value <= capacity)
+
+                        // The system has written `outLen` elements, so they are
+                        // initialized and inside the buffer's capacity bounds.
+                        val outLen = outLenVar.value.convert<Int>()
+                        val bytes = ByteArray(outLen) { i -> buffer[i].toByte() }
+
+                        // This should always contain UTF-8 since we told the system to
+                        // write UTF-8 into the buffer.
+                        bytes.decodeToString()
+                    }
+
+                if (emitted != null) yield(emitted)
             }
-
-            // The current index has been checked that its still within bounds of the array.
-            // We don't retain the strings because we know we have total ownership of the backing array.
-            val locale: CFStringRef = raw.reinterpret()
-            idx++
-
-            // `locale` is a valid CFString pointer because the array will always contain a value.
-            val strLen = CFStringGetLength(locale)
-
-            val rangeArg: CValue<CFRange> = cValue {
-                location = 0.convert()
-                length = strLen
-            }
-
-            val emitted = memScoped {
-                val capacityVar = alloc<CFIndexVar>().apply { value = 0.convert() }
-                // - `locale` is a valid CFString
-                // - The supplied range is within the length of the string.
-                // - `capacity` is writable.
-                // Passing NULL and `0` is correct for the buffer to get the
-                // encoded output length.
-                CFStringGetBytes(
-                    locale,
-                    rangeArg,
-                    kCFStringEncodingUTF8,
-                    0u,
-                    false,
-                    null,
-                    0.convert(),
-                    capacityVar.ptr,
-                )
-
-                val capacity = capacityVar.value
-                // Guard against a zero-sized allocation, if that were to somehow occur.
-                if (capacity.convert<Long>() <= 0L) return@memScoped null
-
-                // This is the number of bytes that will be written to
-                // the buffer, not the number of codepoints they would contain.
-                val buffer = allocArray<UByteVar>(capacity.convert<Long>())
-
-                val outLenVar = alloc<CFIndexVar>().apply { value = 0.convert() }
-                // - `locale` is a valid CFString
-                // - The supplied range is within the length of the string.
-                // - `buffer` is writable and has sufficent capacity to receive the data.
-                // - `maxBufLen` is correctly based on `buffer`'s available capacity.
-                // - `outLen` is writable.
-                CFStringGetBytes(
-                    locale,
-                    rangeArg,
-                    kCFStringEncodingUTF8,
-                    0u,
-                    false,
-                    buffer,
-                    capacity,
-                    outLenVar.ptr,
-                )
-
-                // Sanity check that both calls to `CFStringGetBytes`
-                // were equivalent. If they weren't, the system is doing
-                // something very wrong...
-                check(outLenVar.value <= capacity)
-
-                // The system has written `outLen` elements, so they are
-                // initialized and inside the buffer's capacity bounds.
-                val outLen = outLenVar.value.convert<Int>()
-                val bytes = ByteArray(outLen) { i -> buffer[i].toByte() }
-
-                // This should always contain UTF-8 since we told the system to
-                // write UTF-8 into the buffer.
-                bytes.decodeToString()
-            }
-
-            if (emitted != null) yield(emitted)
+        } finally {
+            CFRelease(preferredLangs.array)
         }
-    } finally {
-        CFRelease(preferredLangs.array)
     }
-}
 
 @OptIn(ExperimentalForeignApi::class)
-private class CFArrayHandle(val array: platform.CoreFoundation.CFArrayRef, val count: Long)
+private class CFArrayHandle(
+    val array: platform.CoreFoundation.CFArrayRef,
+    val count: Long,
+)
 
 @OptIn(ExperimentalForeignApi::class)
 private fun getLanguages(): CFArrayHandle? {
@@ -127,7 +133,9 @@ private fun getLanguages(): CFArrayHandle? {
     val langs = CFLocaleCopyPreferredLanguages() ?: return null
     // The returned array is a valid CFArray object.
     val count = CFArrayGetCount(langs)
-    return if (count.convert<Long>() != 0L) CFArrayHandle(langs, count.convert()) else {
+    return if (count.convert<Long>() != 0L) {
+        CFArrayHandle(langs, count.convert())
+    } else {
         CFRelease(langs)
         null
     }
