@@ -13,9 +13,10 @@ private const val SEPARATOR = ''
  * which we can't use directly because it discards information about how it
  * retrieved the global.
  */
-private fun navigatorLanguagesJoined(): String? = js(
-    "(() => { var g = (typeof window !== 'undefined') ? window : ((typeof self !== 'undefined') ? self : ((typeof globalThis !== 'undefined') ? globalThis : null)); if (!g || !g.navigator || !g.navigator.languages) return null; return g.navigator.languages.join('\\u0001'); })()"
-)
+private fun navigatorLanguagesJoined(): String? =
+    js(
+        "(() => { var g = (typeof window !== 'undefined') ? window : ((typeof self !== 'undefined') ? self : ((typeof globalThis !== 'undefined') ? globalThis : null)); if (!g || !g.navigator || !g.navigator.languages) return null; return g.navigator.languages.join('\\u0001'); })()",
+    )
 
 internal actual fun providerGet(): Iterator<String> {
     val joined = navigatorLanguagesJoined() ?: return emptyList<String>().iterator()

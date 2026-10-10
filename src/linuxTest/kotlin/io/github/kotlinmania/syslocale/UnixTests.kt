@@ -13,7 +13,9 @@ private const val LANG = "LANG"
 private class MockEnv : EnvAccess {
     private val map: MutableMap<String, String> = mutableMapOf()
 
-    fun put(key: String, value: String) { map[key] = value }
+    fun put(key: String, value: String) {
+        map[key] = value
+    }
 
     override fun get(key: String): String? = map[key]
 }
@@ -25,7 +27,6 @@ private const val POSIX_MOD = "fr_FR@euro"
 private const val POSIX_ENC_MOD = "fr_FR.UTF-8@euro"
 
 class UnixTests {
-
     @Test
     fun parseIdentifier() {
         assertEquals(BCP_47, posixToBcp47(BCP_47))
