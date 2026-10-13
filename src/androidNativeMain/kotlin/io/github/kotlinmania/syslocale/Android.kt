@@ -1,11 +1,10 @@
 // port-lint: source android.rs
 package io.github.kotlinmania.syslocale
 
+import io.github.kotlinmania.libc.unix.linuxlike.android.PROP_VALUE_MAX
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
-
-private const val PROP_VALUE_MAX = 92
 
 private const val LOCALE_KEY = "persist.sys.locale"
 private const val PRODUCT_LOCALE_KEY = "ro.product.locale"
@@ -17,7 +16,7 @@ private const val LOCALEVAR_KEY = "persist.sys.localevar"
 
 @OptIn(ExperimentalForeignApi::class)
 private fun getProperty(name: String): String? =
-    getenv(name)?.toKString()?.takeIf { it.isNotEmpty() }
+    getenv(name)?.toKString()?.takeIf { it.isNotEmpty() && it.length <= PROP_VALUE_MAX }
 
 private fun readLocale(): String? {
     getProperty(LOCALE_KEY)?.let { return it }
