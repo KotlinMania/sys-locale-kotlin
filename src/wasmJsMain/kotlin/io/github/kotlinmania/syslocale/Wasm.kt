@@ -1,4 +1,4 @@
-// port-lint: source src/wasm.rs
+// port-lint: source wasm.rs
 @file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
 
 package io.github.kotlinmania.syslocale

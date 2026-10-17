@@ -4,14 +4,16 @@ Based on AST analysis, here are the concrete next steps.
 
 ## Summary
 
-- **Files Present:** 1/7 (14.3%)
-- **Function parity:** 3/21 matched (target 3) — 14.3%
-- **Class/type parity:** 0/15 matched (target 1) — 0.0%
-- **Combined symbol parity:** 3/36 matched (target 4) — 8.3%
-- **Average inline-code cosine:** 0.34 (function body across 1 matched files)
-- **Average documentation cosine:** 0.82 (doc text across 1 matched files)
+- **Files Present:** 0/7 (0.0%)
+- **Function parity:** 0/17 matched — 0.0%
+- **Class/type parity:** 0/15 matched — 0.0%
+- **Combined symbol parity:** 0/32 matched — 0.0%
+- **Average inline-code cosine:** 0.00 (function body across 0 matched files)
+- **Average documentation cosine:** 0.00 (doc text across 0 matched files)
 - **Cheat-zeroed Files:** 0
-- **Critical Issues:** 1 files with <0.60 function similarity
+- **Critical Issues:** 0 files with <0.60 function similarity
+- **Needs Review:** 0 files with 0.60-0.84 function similarity
+- **Excellent:** 0 files with >=0.85 function similarity
 
 ## Priority 1: Fix Incomplete High-Dependency Files
 
@@ -27,18 +29,6 @@ No missing high-value files detected.
 
 Every matched file is listed below with function and type symbol parity.
 
-### 1. lib
-
-- **Target:** `syslocale.Lib`
-- **Similarity:** 0.34
-- **Dependents:** 0
-- **Priority Score:** 10406.6
-- **Functions:** 3/4 matched (target 3)
-- **Missing functions:** `get`
-- **Types:** 0/0 matched (target 1)
-- **Missing types:** _none_
-- **Tests:** 1/1 matched
-
 ## Success Criteria
 
 For each file to be considered "complete":
@@ -47,4 +37,17 @@ For each file to be considered "complete":
 - All tests ported
 - Documentation ported
 - port-lint header present
+
+## Reexport / Wiring Modules
+
+These files match `reexport_modules` patterns in `.ast_distance_config.json`. They are filtered out of
+normal priority and missing-file ladders because they are wiring
+modules, not direct logic ports. Consult them for call-site routing;
+do not treat them as the next implementation target by default.
+
+### Missing
+
+| Source | Expected target | Deps | Source path | Expected path |
+|--------|-----------------|------|-------------|---------------|
+| `lib` | `Lib` | 0 | `lib.rs` | `Lib.kt` |
 

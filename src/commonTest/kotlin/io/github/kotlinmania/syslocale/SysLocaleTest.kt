@@ -1,10 +1,9 @@
-// port-lint: source lib.rs (mod tests)
 package io.github.kotlinmania.syslocale
 
 import kotlin.test.Test
 import kotlin.test.assertFalse
 
-class LibTests {
+class SysLocaleTest {
     @Test
     fun canObtainLocale() {
         val locale = getLocale()

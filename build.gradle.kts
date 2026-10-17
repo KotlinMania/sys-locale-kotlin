@@ -426,7 +426,6 @@ kotlin {
         addToXcf()
     }
 
-
     // Other native — Tier 1/2
     linuxX64 { configureBenchmarkCompilation() }
     linuxArm64 { configureBenchmarkCompilation() }
@@ -493,6 +492,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             commonTestDependencyBundle?.let { implementation(it) }
+        }
+        findByName("mingwMain")?.dependencies {
+            implementation(libs.windows.sys.kotlin)
         }
         if (benchmarkEnabled) {
             val commonBenchmark = maybeCreate("commonBenchmark")
