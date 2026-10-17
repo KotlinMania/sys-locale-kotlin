@@ -494,6 +494,9 @@ kotlin {
             implementation(kotlin("test"))
             commonTestDependencyBundle?.let { implementation(it) }
         }
+        findByName("mingwMain")?.dependencies {
+            implementation(libs.windows.sys.kotlin)
+        }
         if (benchmarkEnabled) {
             val commonBenchmark = maybeCreate("commonBenchmark")
             commonBenchmark.dependencies {
@@ -608,6 +611,11 @@ tasks.named("check") {
     dependsOn(tasks.withType<dev.detekt.gradle.Detekt>())
     dependsOn(tasks.named("ktlintCheck"))
     dependsOn("test")
+}
+
+tasks.named("test") {
+    dependsOn("hostTests")
+    dependsOn("swiftExportSmokeTest")
 }
 
 // ============================================================================
