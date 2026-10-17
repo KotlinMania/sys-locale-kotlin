@@ -1,9 +1,7 @@
-// port-lint: source src/unix.rs
+// port-lint: source unix.rs
 package io.github.kotlinmania.syslocale
 
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.toKString
-import platform.posix.getenv
+import io.github.kotlinmania.libc.unix.getenv
 
 internal const val LANGUAGE = "LANGUAGE"
 internal const val LC_ALL = "LC_ALL"
@@ -22,12 +20,13 @@ internal interface EnvAccess {
 }
 
 /** Proxy to the process environment via `getenv`. */
-@OptIn(ExperimentalForeignApi::class)
 internal object StdEnv : EnvAccess {
-    override fun get(key: String): String? = getenv(key)?.toKString()
+    override fun get(key: String): String? = getenv(key)
 }
 
-internal actual fun providerGet(): Iterator<String> = innerGet(StdEnv)
+internal actual fun providerGet(): Iterator<String> = get()
+
+internal fun get(): Iterator<String> = get(StdEnv)
 
 /**
  * Retrieves a list of unique locales by checking specific environment variables
@@ -35,16 +34,13 @@ internal actual fun providerGet(): Iterator<String> = innerGet(StdEnv)
  *
  * The function first checks the `LANGUAGE` environment variable, which can contain
  * one or more locales separated by a colon (`:`). It then splits these values,
- * converts them from [POSIX](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html)
- * to [BCP 47](https://www.ietf.org/rfc/bcp/bcp47.html) format, and adds them to the list of locales
+ * converts them from POSIX to BCP 47 format, and adds them to the list of locales
  * if they are not already included.
  *
  * Next, the function checks the `LC_ALL`, `LC_MESSAGES`, and `LANG` environment
  * variables. Each of these variables contains a single locale. If a locale is found,
- * and it's not empty, it is converted to BCP 47 format and added to the list if
+ * and it is not empty, it is converted to BCP 47 format and added to the list if
  * it is not already included.
- *
- * For more information check this issue: https://github.com/1Password/sys-locale/issues/14.
  *
  * The function ensures that locales are returned in the order of precedence
  * and without duplicates. The final list of locales is returned as an iterator.
@@ -63,13 +59,13 @@ internal actual fun providerGet(): Iterator<String> = innerGet(StdEnv)
  * # Example
  *
  * ```
- * val locales = innerGet(env).asSequence().toList()
+ * val locales = get(env).asSequence().toList()
  * for (locale in locales) {
  *     println("User's preferred locales: $locale")
  * }
  * ```
  */
-internal fun innerGet(env: EnvAccess): Iterator<String> {
+internal fun get(env: EnvAccess): Iterator<String> {
     val locales = mutableListOf<String>()
 
     // LANGUAGE contains one or multiple locales separated by colon (':')
@@ -98,40 +94,11 @@ internal fun innerGet(env: EnvAccess): Iterator<String> {
 /**
  * Converts a POSIX locale string to a BCP 47 locale string.
  *
- * This function processes the input `locale` by removing any character encoding
+ * This function processes the input locale by removing any character encoding
  * (the part after the `.` character) and any modifiers (the part after the `@` character).
- * It replaces underscores (`_`) with hyphens (`-`) to conform to BCP 47 formatting.
+ * It replaces underscores with hyphens to conform to BCP 47 formatting.
  *
  * If the locale is already in the BCP 47 format, no changes are made.
- *
- * Useful links:
- * - [The Open Group Base Specifications Issue 8 - 7. Locale](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap07.html)
- * - [The Open Group Base Specifications Issue 8 - 8. Environment Variables](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html)
- * - [BCP 47 specification](https://www.ietf.org/rfc/bcp/bcp47.html)
- *
- * # Examples
- *
- * ```
- * val bcp47a = posixToBcp47("en-US") // already BCP 47
- * check(bcp47a == "en-US")           // no changes
- *
- * val bcp47b = posixToBcp47("en_US")
- * check(bcp47b == "en-US")
- *
- * val bcp47c = posixToBcp47("ru_RU.UTF-8")
- * check(bcp47c == "ru-RU")
- *
- * val bcp47d = posixToBcp47("fr_FR@dict")
- * check(bcp47d == "fr-FR")
- *
- * val bcp47e = posixToBcp47("de_DE.UTF-8@euro")
- * check(bcp47e == "de-DE")
- * ```
- *
- * # Pending work
- *
- * 1. Implement POSIX to BCP 47 modifier conversion (see https://github.com/1Password/sys-locale/issues/32).
- * 2. Optimize to avoid creating a new buffer (see https://github.com/1Password/sys-locale/pull/33).
  */
 internal fun posixToBcp47(locale: String): String {
     val out = StringBuilder()

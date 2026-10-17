@@ -1,4 +1,4 @@
-// port-lint: source src/unix.rs
+// port-lint: source unix.rs
 package io.github.kotlinmania.syslocale
 
 private const val LANGUAGE = "LANGUAGE"

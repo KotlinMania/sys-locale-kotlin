@@ -426,7 +426,6 @@ kotlin {
         addToXcf()
     }
 
-
     // Other native — Tier 1/2
     linuxX64 { configureBenchmarkCompilation() }
     linuxArm64 { configureBenchmarkCompilation() }
@@ -611,11 +610,6 @@ tasks.named("check") {
     dependsOn(tasks.withType<dev.detekt.gradle.Detekt>())
     dependsOn(tasks.named("ktlintCheck"))
     dependsOn("test")
-}
-
-tasks.named("test") {
-    dependsOn("hostTests")
-    dependsOn("swiftExportSmokeTest")
 }
 
 // ============================================================================

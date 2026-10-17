@@ -1,4 +1,4 @@
-// port-lint: source src/unix.rs (mod tests)
+// port-lint: tests unix.rs
 package io.github.kotlinmania.syslocale
 
 import kotlin.test.Test
@@ -26,7 +26,7 @@ private const val POSIX_ENC = "fr_FR.UTF-8"
 private const val POSIX_MOD = "fr_FR@euro"
 private const val POSIX_ENC_MOD = "fr_FR.UTF-8@euro"
 
-class UnixTests {
+class UnixTest {
     @Test
     fun parseIdentifier() {
         assertEquals(BCP_47, posixToBcp47(BCP_47))
@@ -50,12 +50,12 @@ class UnixTests {
             env.put(LC_ALL, lcAll)
             env.put(LC_MESSAGES, lcMessages)
             env.put(LANG, lang)
-            val actual = innerGet(env).asSequence().toList()
+            val actual = get(env).asSequence().toList()
             assertEquals(expected, actual)
         }
 
         val env = MockEnv()
-        assertNull(innerGet(env).asSequence().firstOrNull())
+        assertNull(get(env).asSequence().firstOrNull())
 
         // Empty
         case(env, "", "", "", "", emptyList())

@@ -1,4 +1,4 @@
-// port-lint: source src/wasm.rs
+// port-lint: source wasm.rs
 package io.github.kotlinmania.syslocale
 
 private sealed interface GlobalType {
@@ -19,10 +19,6 @@ private sealed interface GlobalType {
 
 /**
  * Returns a handle to the global scope object.
- *
- * Simplified version of https://github.com/rustwasm/wasm-bindgen/blob/main/crates/js-sys/src/lib.rs,
- * which we can't use directly because it discards information about how it
- * retrieved the global.
  */
 private fun global(): GlobalType? {
     val win: dynamic = js("(typeof window !== 'undefined') ? window : null")
@@ -34,7 +30,7 @@ private fun global(): GlobalType? {
     return null
 }
 
-internal actual fun providerGet(): Iterator<String> {
+private fun get(): Iterator<String> {
     val scope = global() ?: return emptyList<String>().iterator()
     val nav: dynamic = scope.navigator
     if (nav == null) return emptyList<String>().iterator()
@@ -48,3 +44,5 @@ internal actual fun providerGet(): Iterator<String> {
     }
     return out.iterator()
 }
+
+internal actual fun providerGet(): Iterator<String> = get()

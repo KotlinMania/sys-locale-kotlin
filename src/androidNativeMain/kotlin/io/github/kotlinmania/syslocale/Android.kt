@@ -1,10 +1,8 @@
 // port-lint: source android.rs
 package io.github.kotlinmania.syslocale
 
+import io.github.kotlinmania.libc.unix.getenv
 import io.github.kotlinmania.libc.unix.linuxlike.android.PROP_VALUE_MAX
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.toKString
-import platform.posix.getenv
 
 private const val LOCALE_KEY = "persist.sys.locale"
 private const val PRODUCT_LOCALE_KEY = "ro.product.locale"
@@ -14,9 +12,8 @@ private const val LANG_KEY = "persist.sys.language"
 private const val COUNTRY_KEY = "persist.sys.country"
 private const val LOCALEVAR_KEY = "persist.sys.localevar"
 
-@OptIn(ExperimentalForeignApi::class)
 private fun getProperty(name: String): String? =
-    getenv(name)?.toKString()?.takeIf { it.isNotEmpty() && it.length <= PROP_VALUE_MAX }
+    getenv(name)?.takeIf { it.isNotEmpty() && it.length <= PROP_VALUE_MAX }
 
 private fun readLocale(): String? {
     getProperty(LOCALE_KEY)?.let { return it }
@@ -45,7 +42,9 @@ private fun readLocale(): String? {
     return null
 }
 
-internal actual fun providerGet(): Iterator<String> {
+private fun get(): Iterator<String> {
     val loc = readLocale()
     return if (loc != null) listOf(loc).iterator() else emptyList<String>().iterator()
 }
+
+internal actual fun providerGet(): Iterator<String> = get()

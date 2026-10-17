@@ -25,7 +25,7 @@ import platform.CoreFoundation.CFStringRef
 import platform.CoreFoundation.kCFStringEncodingUTF8
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun providerGet(): Iterator<String> =
+private fun get(): Iterator<String> =
     iterator {
         val preferredLangs = getLanguages() ?: return@iterator
         try {
@@ -140,3 +140,5 @@ private fun getLanguages(): CFArrayHandle? {
         null
     }
 }
+
+internal actual fun providerGet(): Iterator<String> = get()
